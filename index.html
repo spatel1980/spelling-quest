@@ -250,6 +250,7 @@
     sndGood: document.getElementById('sndGood'),
     sndBad: document.getElementById('sndBad'),
     sndFanfare: document.getElementById('sndFanfare'),
+    voiceSel: document.getElementById('voiceSel'),
   };
 
   /************
@@ -275,15 +276,20 @@
   /************
    * AUDIO (tiny built-in tones)
    ************/
+  let __AUDIO_CTX__ = null;
+  function getAudioCtx(){
+    if(!__AUDIO_CTX__) __AUDIO_CTX__ = new (window.AudioContext||window.webkitAudioContext)();
+    return __AUDIO_CTX__;
+  }
   function setTone(el, type){
-    // Generate short data URIs for simple beeps (fallback if audio blocked)
-    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    // Reuse a single AudioContext to avoid degradation/leaks on some PCs
+    const ctx = getAudioCtx();
     const dur = type==='win'?0.25: type==='fanfare'?0.6: 0.18;
     const freq = type==='bad'?220: type==='win'?660: 880;
     const osc = ctx.createOscillator(); const gain = ctx.createGain();
-    osc.type = 'sine'; osc.frequency.value = freq; gain.gain.value=0.001; // start low
+    osc.type = 'sine'; osc.frequency.value = freq; gain.gain.value=0.001;
     osc.connect(gain); gain.connect(ctx.destination);
-    const now = ctx.currentTime; gain.gain.setValueAtTime(0.1, now);
+    const now = ctx.currentTime; gain.gain.setValueAtTime(0.08, now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now+dur);
     osc.start(); osc.stop(now+dur);
   }
@@ -294,25 +300,40 @@
   /************
    * SPEECH (US female preferred)
    ************/
-  let voices=[];
-  function pickVoice(){
-    voices = speechSynthesis.getVoices();
-    // Prefer en-US female
-    let v = voices.find(v=>/en-US/i.test(v.lang) && /female/i.test(v.name))
-         || voices.find(v=>/en-US/i.test(v.lang))
-         || voices[0];
-    return v || null;
-  }
-  function speakWord(word){
-    if(!('speechSynthesis' in window)) return;
-    const utter = new SpeechSynthesisUtterance(word);
-    const v = pickVoice();
-    if(v) utter.voice = v;
-    utter.rate = 0.9; utter.pitch = 1.1; utter.lang = 'en-US';
-    speechSynthesis.cancel();
-    speechSynthesis.speak(utter);
-  }
-  speechSynthesis.onvoiceschanged = ()=>{ voices = speechSynthesis.getVoices(); };
+  const Speech = {
+    voices: [],
+    current: null,
+    counter: 0,
+    cooldown: false,
+    chooseVoice(){
+      if(!this.voices || !this.voices.length) this.voices = speechSynthesis.getVoices();
+      const prefer = [/female/i, /Samantha/i, /Allison/i, /Aria/i, /Jenny/i, /Google US English/i];
+      let v = this.voices.find(v=>/en-US/i.test(v.lang) && prefer.some(r=>r.test(v.name)))
+           || this.voices.find(v=>/en-US/i.test(v.lang))
+           || this.voices[0];
+      return v || null;
+    },
+    init(){
+      this.voices = speechSynthesis.getVoices();
+      this.current = this.chooseVoice();
+      speechSynthesis.onvoiceschanged = ()=>{ this.voices = speechSynthesis.getVoices(); this.current = this.chooseVoice(); };
+      document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ try{ speechSynthesis.cancel(); }catch(e){} } });
+    },
+    speak(word){
+      if(!('speechSynthesis' in window)) return;
+      if(this.cooldown) return; // debounce rapid taps
+      this.cooldown = true; setTimeout(()=> this.cooldown=false, 350);
+      try{ speechSynthesis.cancel(); }catch(e){}
+      const u = new SpeechSynthesisUtterance(word);
+      const v = this.current || this.chooseVoice();
+      if(v) u.voice = v;
+      u.lang = 'en-US'; u.rate = 0.95; u.pitch = 1.05; u.volume = 1;
+      u.onend = ()=>{ this.counter++; if(this.counter % 30 === 0){ try{ speechSynthesis.cancel(); }catch(e){} } };
+      u.onerror = ()=>{ try{ speechSynthesis.cancel(); }catch(e){} };
+      speechSynthesis.speak(u);
+    }
+  };
+  Speech.init();
 
   /************
    * UTIL
@@ -372,8 +393,11 @@
       </div>
     `;
     els.gameArea.innerHTML = html;
-    document.getElementById('btnSpeak').onclick = ()=> speakWord(state.target);
-    speakWord(state.target);
+    (function(){
+      const speakBtn = document.getElementById('btnSpeak');
+      speakBtn.onclick = ()=>{ speakBtn.disabled = true; Speech.speak(state.target, ()=>{ setTimeout(()=> speakBtn.disabled = false, 100); }); };
+    })();
+    Speech.speak(state.target);
   }
 
   function finishWord(revealedCompletely){
