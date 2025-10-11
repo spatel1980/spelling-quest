@@ -1,311 +1,609 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Space Saboteur Game</title>
+  <title>Spelling Quest</title>
+  <meta name="theme-color" content="#4f46e5" />
   <style>
-    html, body { margin:0; padding:0; background:#000; color:#fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
-    #info { position: fixed; top: 8px; left: 8px; right: 8px; display:flex; gap:12px; align-items:center; z-index: 2; }
-    .pill { background: rgba(255,255,255,0.08); padding:6px 10px; border-radius: 999px; font-size: 14px; }
-    #footer { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px; font-size: 16px; color: #ffe57f; background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.6) 40%, rgba(0,0,0,0.85) 100%); z-index: 2; }
-    #game { display:block; margin: 0 auto; }
-    #restart { position: fixed; top: 8px; right: 8px; background:#222; color:#fff; border:1px solid #444; padding:6px 10px; border-radius:8px; cursor:pointer; z-index: 2; }
-    #restart:hover { background:#2b2b2b; }
+    :root{
+      --bg:#f8fafc;/* slate-50 */
+      --panel:#ffffff;
+      --ink:#0f172a;/* slate-900 */
+      --muted:#475569;/* slate-600 */
+      --brand:#4f46e5;/* indigo-600 */
+      --brand-2:#6366f1;/* indigo-500 */
+      --ok:#16a34a;/* green-600 */
+      --warn:#eab308;/* yellow-500 */
+      --bad:#ef4444;/* red-500 */
+      --card:#eef2ff;/* indigo-50 */
+      --kbd:#e2e8f0;/* slate-200 */
+      --radius:18px;
+      --shadow:0 10px 24px rgba(2,6,23,.12);
+      --trans:180ms cubic-bezier(.2,.8,.2,1);
+      --gap:14px;
+    }
+    html,body{height:100%;}
+    body{
+      margin:0; background:var(--bg); color:var(--ink); font-family:ui-rounded, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Color Emoji"; display:flex; align-items:center; justify-content:center;
+    }
+    .app{width:min(960px,100%); padding:18px;}
+    header{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px;}
+    .brand{display:flex; align-items:center; gap:12px;}
+    .mascot{width:44px; height:44px; background:conic-gradient(from 0deg, #fff 0 25%, #fde68a 25% 50%, #a5b4fc 50% 75%, #86efac 75% 100%); border-radius:50%; box-shadow:var(--shadow); position:relative}
+    .mascot::after{content:"★"; position:absolute; inset:0; display:grid; place-items:center; font-size:22px; color:#1f2937}
+    .title{font-weight:800; letter-spacing:.2px}
+    .pill{background:var(--card); padding:6px 12px; border-radius:999px; font-weight:600; color:var(--brand);}
+
+    .panel{background:var(--panel); border-radius:var(--radius); box-shadow:var(--shadow); padding:18px;}
+    .row{display:flex; gap:var(--gap); flex-wrap:wrap;}
+    .col{flex:1 1 260px}
+
+    .status{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+    .progress-wrap{background:#e5e7eb; border-radius:999px; height:10px; width:200px; overflow:hidden}
+    .progress{height:100%; width:0; background:linear-gradient(90deg,var(--brand),var(--brand-2)); transition:width var(--trans)}
+
+    .game-card{display:grid; gap:18px}
+    .word-slots{display:flex; gap:10px; justify-content:center; flex-wrap:wrap}
+    .slot{width:44px; height:64px; border-radius:12px; background:var(--card); display:grid; place-items:center; font-size:28px; font-weight:800; box-shadow:inset 0 -3px 0 rgba(99,102,241,.25)}
+    .slot.underscore{color:#94a3b8}
+    .shake{animation:shake .3s}
+    @keyframes shake{ 10%{transform:translateX(-4px)} 30%{transform:translateX(4px)} 50%{transform:translateX(-3px)} 70%{transform:translateX(3px)} 100%{transform:translateX(0)} }
+
+    .controls{display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap}
+    button{border:0; background:var(--brand); color:#fff; padding:12px 16px; font-weight:700; border-radius:12px; cursor:pointer; box-shadow:var(--shadow); transition:transform var(--trans), background var(--trans);}
+    button:hover{transform:translateY(-1px); background:var(--brand-2)}
+    button.secondary{background:#e2e8f0; color:#111827}
+    button.ghost{background:transparent; color:var(--brand); box-shadow:none; text-decoration:underline}
+    button.bad{background:var(--bad)}
+    .icon-btn{display:flex; align-items:center; gap:10px}
+
+    .stats{display:flex; gap:14px; align-items:center; justify-content:center; color:var(--muted); font-weight:700}
+    .kbd{background:var(--kbd); padding:8px 10px; border-radius:10px; min-width:34px; text-align:center; font-weight:800}
+
+    .onscreen-kb{display:grid; grid-template-columns:repeat(9,1fr); gap:8px; justify-items:center}
+    .key{background:#fff; border:2px solid #e5e7eb; border-bottom-width:4px; border-radius:10px; padding:10px; width:100%; text-align:center; font-weight:800; cursor:pointer; transition:transform var(--trans);}
+    .key:active{transform:translateY(1px)}
+
+    .settings{display:flex; gap:12px; align-items:center; flex-wrap:wrap}
+    .switch{display:flex; align-items:center; gap:8px}
+    .switch input{accent-color:var(--brand)}
+
+    .modal-backdrop{position:fixed; inset:0; background:rgba(2,6,23,.5); display:grid; place-items:center; z-index:50}
+    .modal{background:#fff; padding:20px; border-radius:16px; width:min(520px,94%); box-shadow:var(--shadow);}
+    .modal h2{margin-top:0}
+    .field{display:flex; flex-direction:column; gap:6px; margin:10px 0}
+    .field input, .field select{padding:12px; border:2px solid #e5e7eb; border-radius:10px; font-size:16px}
+
+    .badge{display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:999px; font-weight:800}
+    .badge.novice{background:#fef3c7; color:#92400e}
+    .badge.competent{background:#d1fae5; color:#065f46}
+    .badge.proficient{background:#e0e7ff; color:#3730a3}
+    .badge.expert{background:#dcfce7; color:#065f46}
+
+    .sr{position:absolute; left:-9999px}
+
+    /* High contrast */
+    .high-contrast{--bg:#0b0b0b; --panel:#111; --ink:#fff; --muted:#eee; --card:#222; --kbd:#333;}
+    /* High-contrast fixes for interactive elements */
+    .high-contrast .key{background:#000; color:#fff; border-color:#666;}
+    .high-contrast .kbd{background:#000; color:#fff;}
+    .high-contrast .slot{background:#000; color:#fff; box-shadow:inset 0 -3px 0 rgba(255,255,255,.15)}
+    .high-contrast .slot.underscore{color:#ddd}
+    .high-contrast .panel{background:#111;}
+    .high-contrast .pill{background:#000; color:#fff;}
+    .high-contrast .progress-wrap{background:#333}
+
+    /* Larger text */
+    .larger-text{font-size:18px}
+
+    /* OpenDyslexic (attempt, will fallback if not installed) */
+    .dyslexic{font-family:'OpenDyslexic', 'Atkinson Hyperlegible', system-ui, -apple-system, Segoe UI, Roboto, Arial}
+
+    @media (max-width:600px){
+      .slot{width:36px; height:56px; font-size:24px}
+    }
   </style>
 </head>
 <body>
-  <div id="info">
-    <div class="pill" id="attempts">Attempts: 3</div>
-    <div class="pill" id="hint">Click a character to guess.</div>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="mascot" aria-hidden="true"></div>
+        <div>
+          <div class="title">Spelling Quest</div>
+          <div class="pill" id="profilePill">Welcome!</div>
+        </div>
+      </div>
+      <div class="settings">
+        <label class="switch"><input type="checkbox" id="toggleDys"> Dyslexia-friendly</label>
+        <label class="switch"><input type="checkbox" id="toggleContrast"> High contrast</label>
+        <label class="switch"><input type="checkbox" id="toggleBigText"> Larger text</label>
+        <label class="switch"><input type="checkbox" id="toggleSound" checked> Sound</label>
+        <label class="switch"><input type="checkbox" id="toggleAdaptive" checked> Adaptive</label>
+      </div>
+    </header>
+
+    <section class="panel status">
+      <div class="progress-wrap" aria-label="Progress to 5 words"><div id="progress" class="progress"></div></div>
+      <div>|</div>
+      <div id="scoreReadout">Score: 0</div>
+      <div id="mistakeReadout">Mistakes: 0</div>
+      <div class="pill" id="levelPill">Level: —</div>
+    </section>
+
+    <section class="panel game-card" id="gameArea" aria-live="polite">
+      <!-- Game content injected here -->
+    </section>
+
+    <section class="panel" id="kbArea">
+      <div class="onscreen-kb" id="kb"></div>
+    </section>
   </div>
-  <button id="restart" title="Restart (same page)">Restart</button>
-  <div id="footer">Clue will appear here before each attempt.</div>
-  <canvas id="game" width="800" height="600"></canvas>
+
+  <!-- Startup Modal -->
+  <div class="modal-backdrop" id="startModal" role="dialog" aria-modal="true">
+    <div class="modal">
+      <h2>Welcome to Spelling Quest</h2>
+      <p>Enter your player info to get a perfect starting challenge.</p>
+      <div class="field">
+        <label for="name">Name</label>
+        <input id="name" type="text" placeholder="e.g., Ari" />
+      </div>
+      <div class="field">
+        <label for="age">Age</label>
+        <input id="age" type="number" min="4" max="17" placeholder="e.g., 9" />
+      </div>
+      <div class="field">
+        <label for="profileSel">Or pick an existing player</label>
+        <select id="profileSel"></select>
+      </div>
+      <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:12px">
+        <button class="secondary" id="resetData">Parent Reset</button>
+        <button id="startBtn">Start</button>
+      </div>
+    </div>
+  </div>
+
+  <audio id="sndGood" preload="auto"></audio>
+  <audio id="sndBad" preload="auto"></audio>
+  <audio id="sndFanfare" preload="auto"></audio>
 
   <script>
-  // Space Saboteur Game — 7 characters, 3 attempts, 3 clues
+  /*****************
+   * WORD LISTS (US English, no proper nouns)
+   * Each level aims for large variety. You can extend freely.
+   *****************/
+  const WORDS = {
+    // Pre‑K / K: CVC and simple blends, very high frequency
+    PKK: [
+      'am','an','at','ax','bad','bag','bat','bed','beg','bet','big','bin','bit','bog','bun','bus','bug','cab','can','cap','car','cat','cop','cot','cub','cup','cut','dad','dig','dim','dip','dog','dot','fan','fat','fig','fin','fit','fog','fox','fun','gap','gas','get','gig','got','gum','had','ham','hat','hen','him','hip','hit','hop','hot','hug','jam','jet','job','jog','jug','kid','kit','lab','lap','leg','lid','lip','log','mad','man','map','mat','men','mop','mud','mug','nap','net','nip','not','nut','pad','pal','pan','peg','pen','pet','pig','pin','pit','pod','pop','pot','rag','ram','ran','rat','red','rib','rid','rig','rip','rod','rug','run','sad','sap','sat','saw','set','sip','sit','six','son','sun','tap','ten','tip','top','tub','wag','wax','web','wig','win','yak','yam','yes','zip','zoo',
+      'ship','shop','chin','thin','that','duck','luck','rock','milk','sand','hand','flag','drum','spin','grab','lamp','nest','rain','snail','star','tree','clock','sled','clam','twig','grass','shell','brush','crab','smell','step','truck','brick','stick','black','swift','swim','swam','best','fast','past'
+    ],
+    // Grade 1–2: sight words + common blends/digraphs
+    G12: [
+      'about','acorn','after','again','almost','always','animal','another','answer','around','baby','back','because','become','before','begin','behind','below','between','birthday','brother','busy','butter','candy','change','chicken','children','circle','clean','climb','close','cloud','color','cookie','could','country','cousin','cowboy','crazy','create','crayon','dance','decide','dollar','donkey','dragon','dream','drink','eight','eleven','enjoy','family','farmer','father','favorite','feeling','field','flower','friend','funny','garden','giant','giving','grandma','grandpa','great','green','happy','heavy','hello','honey','jelly','jungle','kitten','ladder','laugh','light','little','lizard','lunch','many','maybe','middle','minute','money','morning','mother','mountain','movie','never','ninety','noisy','ocean','open','orange','paint','paper','party','people','picture','plain','planet','please','pocket','pretty','pumpkin','purple','quiet','rabbit','really','right','river','school','second','seven','shadow','sheep','shiny','shirt','short','should','shower','simple','sister','skate','sleep','smile','snake','snowy','someone','something','sometimes','sound','space','special','spell','splash','spring','squirrel','start','station','still','street','strong','sudden','summer','supper','table','their','there','these','thing','think','three','throat','today','together','tomorrow','turtle','under','until','water','weather','where','which','white','winter','without','woman','wonder','would','yellow','younger'
+    ],
+    // Grade 3–4: multi‑syllable, prefixes/suffixes, high‑utility words
+    G34: [
+      'ability','accident','address','adventure','afternoon','alphabet','animal','answer','arrive','between','bicycle','bigger','bottle','bottom','boundary','calendar','captain','careful','certain','challenge','chapter','chemical','children','chimney','circle','citizen','collection','college','colony','combine','common','company','compare','complete','concert','conductor','consider','contain','continue','control','country','cousin','creature','decimal','declare','decrease','defend','delicate','deliver','demand','desert','develop','different','difficult','discover','distance','doctor','eastern','economy','eighteen','election','elephant','engineer','enough','equipment','exercise','factory','feather','festival','fitness','future','general','giraffe','government','grammar','harvest','healthy','helicopter','history','holiday','hundred','imagine','include','insect','instead','instrument','island','january','journey','language','library','machine','magnet','measure','medicine','meeting','message','minute','museum','natural','neither','nervous','nothing','number','office','outside','oxygen','passage','pattern','peanut','pencil','percent','perhaps','picture','planet','pleasure','pocket','popular','position','possible','pottery','present','pressure','problem','produce','protect','pumpkin','purpose','pyramid','question','railroad','reason','receive','record','region','remember','require','return','rhythm','science','screen','season','secret','section','sentence','shoulder','signal','sincerely','solution','special','strange','stretch','student','subway','suggest','supply','surface','surprise','teacher','telephone','terrible','theater','though','thousand','through','thunder','together','tomato','traffic','travel','treasure','triangle','trouble','vacation','weather','weighing','western','whisper','wildlife','without','wonder','writing'
+    ],
+    // Grade 5–6: morphology, less common blends, academic vocab
+    G56: [
+      'ability','absolute','abstract','academy','accurate','achieve','acquire','active','actual','adjust','advance','adviser','aerobic','agenda','algebra','ancient','anxiety','approach','argument','arrange','article','attitude','average','bacteria','barrier','biography','biology','boundary','brilliant','calcium','campaign','capacity','category','cemetery','century','challenge','character','citizenship','clarify','collaborate','colonial','combine','commerce','committee','community','compare','complex','compose','compound','comprise','conclude','conduct','confirm','congress','consider','construct','consume','continent','contrast','control','convert','coral','courage','creative','critical','culture','curiosity','decade','decision','decrease','dedicate','definite','deliver','demonstrate','density','describe','design','detailed','develop','diameter','difference','difficult','disappear','discuss','distance','district','effective','election','electric','element','elevate','eligible','embrace','emotion','empire','encourage','endanger','enormous','envelope','equation','estimate','evaluate','evidence','excellent','exchange','exercise','existence','expenses','explore','extreme','factory','famous','feature','fertile','foreign','fraction','frequent','function','furnace','generate','geology','geometry','governor','grammar','grateful','grievous','habitat','heavier','heritage','historic','humidity','identify','illustrate','immigrant','improve','include','inference','influence','injury','inquire','inspire','instruct','integer','intensity','interest','interfere','interpret','invasion','invention','invisible','involve','irrigate','justice','juvenile','language','legend','library','lightning','location','magnetism','marathon','maximum','medical','membrane','memory','migrate','mineral','minimum','mixture','molecule','monument','mystery','national','naturalist','nervous','nucleus','observe','occurred','opinion','opposite','organize','parallel','passage','patient','pattern','percent','physical','planetary','plentiful','pollution','portion','positive','possible','practical','predict','prefer','prefix','pressure','primary','process','product','profile','project','protein','provide','purpose','pursue','radiation','reaction','recognize','region','relative','relieve','remedy','renewable','require','respond','response','result','revenue','schedule','security','sincere','solution','structure','substance','suddenly','sufficient','surface','survival','suspicious','technology','temperature','tension','theory','threaten','tornado','tradition','transfer','transport','triangle','tropical','turbine','typical','ultimate','universe','vacuum','vehicle','vertical','victory','volcano','weathering','wilderness'
+    ],
+    // Grade 7+: challenging/academic
+    G7P: [
+      'aberration','abstinence','accessory','accolade','accommodate','accompany','accomplice','accumulate','accuracy','acquiesce','adolescent','adversarial','aesthetic','alleviate','ambiguous','ameliorate','anachronism','analytical','animosity','annihilate','anomalous','antagonist','antithesis','appeasement','arbitrary','articulate','ascertain','assimilate','austerity','autonomous','avaricious','benevolent','bequeath','bolster','camaraderie','capricious','catalyst','caustically','chronology','coercion','cognizant','collateral','colloquial','commiserate','comparable','compelling','competence','complement','compliance','comprehensive','compulsory','conciliatory','condescend','condone','conjecture','consensus','conspicuous','constituent','construe','contention','contrite','conundrum','convergence','copacetic','corroborate','credulity','criterion','culminate','debilitate','decorum','deference','deleterious','delineate','demagogue','demarcate','denounce','derivative','detrimental','didactic','differential','diligence','diminutive','discrepancy','discretion','disdainful','disparate','disseminate','dissonance','divergent','ebullience','eclectic','efficacious','egregious','elaborate','elicit','elucidate','emaciated','embellish','embezzlement','emphatically','empirical','encapsulation','enigmatic','ennui','enthralled','entrepreneur','ephemeral','equanimity','equivocate','esoteric','euphemism','evanescent','exacerbate','exasperate','exhilarate','expedient','extemporize','fastidious','flabbergast','formidable','fortuitous','fractious','frivolous','garrulous','gregarious','harangue','hedonistic','heretical','hypocrisy','hypothesis','iconoclast','idiosyncrasy','ignominious','illicit','imminent','impartial','impasse','impeccable','imperative','impertinent','improvise','inadvertent','incredulous','indelible','indigenous','indignant','indomitable','industrious','ineffable','inevitable','inexorable','inferential','ingenuous','inhibit','innocuous','innovative','insatiable','inscrutable','insidious','insolvent','instigate','insurmountable','intangible','integrity','intelligible','intermittent','intrepid','inundate','invaluable','inveterate','irrefutable','itinerant','judicious','languish','legitimate','licentious','magnanimous','malevolent','malicious','manifest','martyrdom','metamorphosis','meticulous','misanthrope','mitigate','nefarious','nonchalant','notorious','obfuscate','obsequious','omnipotent','onerous','opportunist','ostensible','ostracize','paradigm','paradoxical','paragon','partisan','pejorative','penchant','perceive','peremptory','perfunctory','pernicious','perseverance','pertinent','phenomenon','philanthropy','philosophy','plausible','posthumous','pragmatic','precarious','precipice','precocious','predicament','prelude','presumptuous','prevalence','procrastinate','proficient','proliferate','propensity','prosaic','prosperity','protagonist','provincial','provisional','pseudonym','punctilious','quandary','quintessential','rancorous','recalcitrant','reciprocate','reclusive','redolent','redundant','refutable','rejuvenate','relinquish','remuneration','renowned','reparation','repercussion','reprehensible','repudiate','resilient','resolute','resonance','reticent','retribution','reverent','sagacious','salient','sanguine','scrupulous','serendipity','soliloquy','spontaneous','stringent','stupefy','substantiate','subversive','succinct','superfluous','surreptitious','sycophant','taciturn','tangible','tantamount','temerity','tenacious','transcendent','transgression','ubiquitous','unanimous','unctuous','usurpation','venerable','veracity','verbose','versatile','vindicate','virtuoso','vitriolic','vociferous'
+    ]
+  };
 
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
-  const attemptsEl = document.getElementById('attempts');
-  const hintEl = document.getElementById('hint');
-  const footerEl = document.getElementById('footer');
-  const restartBtn = document.getElementById('restart');
+  const LEVEL_FROM_AGE = (age)=>{
+    if(age<=5) return 'PKK';
+    if(age<=7) return 'G12';
+    if(age<=9) return 'G34';
+    if(age<=11) return 'G56';
+    return 'G7P';
+  };
 
-  function randInt(min, max){ return Math.floor(Math.random() * (max - min + 1)) + min; }
+  /************
+   * STATE
+   ************/
+  const state = {
+    profile:null,
+    profiles:{},
+    currentLevel:'PKK',
+    session:[], // words for this game (5)
+    index:0,
+    score:0,
+    sounds:true,
+    adaptive:true,
+    mistakes:0,
+    revealed:[],
+    target:'',
+    pointer:0,
+  };
 
-  const areas = [
-    { name: 'Control Room', x: 120, y: 120 },
-    { name: 'Engine Room',  x: 680, y: 120 },
-    { name: 'Living Quarters', x: 120, y: 480 },
-    { name: 'Cargo Bay', x: 680, y: 480 },
-    { name: 'Med Bay', x: 400, y: 300 }
-  ];
+  const els = {
+    startModal: document.getElementById('startModal'),
+    name: document.getElementById('name'),
+    age: document.getElementById('age'),
+    profileSel: document.getElementById('profileSel'),
+    startBtn: document.getElementById('startBtn'),
+    resetData: document.getElementById('resetData'),
 
-  const baseNames = ['Alex', 'Blair', 'Casey', 'Dana', 'Eli', 'Finley', 'Gray'];
-  const jobs = ['Engineer', 'Pilot', 'Medic', 'Scientist', 'Guard', 'Cook', 'Technician'];
+    progress: document.getElementById('progress'),
+    scoreReadout: document.getElementById('scoreReadout'),
+    mistakeReadout: document.getElementById('mistakeReadout'),
+    levelPill: document.getElementById('levelPill'),
+    profilePill: document.getElementById('profilePill'),
 
-  const RADIUS = 18;                 // character circle radius
-  const MIN_DIST = RADIUS * 2 + 6;   // minimum center-to-center distance to avoid overlap
+    gameArea: document.getElementById('gameArea'),
+    kb: document.getElementById('kb'),
 
-  // --- Simple WebAudio beeps (no external files) ---
-  let audioCtx;
-  function initAudio(){ if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
-  function beep(freq = 440, dur = 0.15, type = 'sine', gain = 0.04){
-    if (!audioCtx) return;
-    const osc = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    osc.type = type; osc.frequency.value = freq;
-    g.gain.value = gain;
-    osc.connect(g).connect(audioCtx.destination);
-    osc.start();
-    setTimeout(() => { osc.stop(); }, dur * 1000);
+    toggleDys: document.getElementById('toggleDys'),
+    toggleContrast: document.getElementById('toggleContrast'),
+    toggleBigText: document.getElementById('toggleBigText'),
+    toggleSound: document.getElementById('toggleSound'),
+    toggleAdaptive: document.getElementById('toggleAdaptive'),
+
+    sndGood: document.getElementById('sndGood'),
+    sndBad: document.getElementById('sndBad'),
+    sndFanfare: document.getElementById('sndFanfare'),
+  };
+
+  /************
+   * STORAGE HELPERS
+   ************/
+  const LS_KEY = 'spellingQuest.v1';
+  function loadAll(){
+    try{ return JSON.parse(localStorage.getItem(LS_KEY)) || {profiles:{}} }catch(e){ return {profiles:{}} }
   }
-  function successJingle(){
-    // little rising triad
-    initAudio();
-    const now = audioCtx.currentTime;
-    const seq = [523.25, 659.25, 783.99]; // C5, E5, G5
-    seq.forEach((f,i)=>{
-      const osc = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      osc.type = 'triangle'; osc.frequency.value = f;
-      g.gain.value = 0.05;
-      osc.connect(g).connect(audioCtx.destination);
-      osc.start(now + i*0.08);
-      osc.stop(now + i*0.08 + 0.17);
-    });
-  }
-  function failBuzz(){
-    // descending buzz
-    initAudio();
-    const now = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(260, now);
-    osc.frequency.exponentialRampToValueAtTime(120, now + 0.25);
-    g.gain.value = 0.04;
-    osc.connect(g).connect(audioCtx.destination);
-    osc.start(now);
-    osc.stop(now + 0.28);
-  }
-
-  let characters = [];
-  let saboteur = null;
-  let attempts = 3;
-  let clueIndex = 0;
-  let clues = [];
-
-  function randomPointInArea(area){
-    // keep some padding from the box edges so names fit
-    const PAD = 24;
-    const x = randInt(area.x - 60 + PAD, area.x + 60 - PAD);
-    const y = randInt(area.y - 60 + PAD, area.y + 60 - PAD);
-    return {x,y};
-  }
-
-  function isFarFromOthers(x, y, list){
-    return list.every(o => Math.hypot(x - o.x, y - o.y) >= MIN_DIST);
-  }
-
-  function placeCharacterNonOverlapping(area, placed){
-    // Try multiple times to find a non-overlapping spot inside the area box
-    for (let tries = 0; tries < 100; tries++) {
-      const p = randomPointInArea(area);
-      if (isFarFromOthers(p.x, p.y, placed)) return p;
+  function saveAll(){ localStorage.setItem(LS_KEY, JSON.stringify({profiles:state.profiles})) }
+  function ensureProfile(name){
+    if(!state.profiles[name]){
+      state.profiles[name] = { name, age: null, level: 'PKK', history: [], settings: { dys:false, hc:false, big:false, sound:true, adaptive:true } };
     }
-    // Fallback: slightly jitter until it fits (extremely unlikely to need)
-    let p = randomPointInArea(area);
-    let jitter = 0;
-    while (!isFarFromOthers(p.x, p.y, placed) && jitter < 200) {
-      p.x += randInt(-2,2); p.y += randInt(-2,2); jitter++;
+    return state.profiles[name];
+  }
+
+  // Initialize profiles dropdown
+  function refreshProfileList(){
+    els.profileSel.innerHTML = '<option value="">—</option>' + Object.keys(state.profiles).map(p=>`<option value="${p}">${p}</option>`).join('');
+  }
+
+  /************
+   * AUDIO (tiny built-in tones)
+   ************/
+  function setTone(el, type){
+    // Generate short data URIs for simple beeps (fallback if audio blocked)
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const dur = type==='win'?0.25: type==='fanfare'?0.6: 0.18;
+    const freq = type==='bad'?220: type==='win'?660: 880;
+    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+    osc.type = 'sine'; osc.frequency.value = freq; gain.gain.value=0.001; // start low
+    osc.connect(gain); gain.connect(ctx.destination);
+    const now = ctx.currentTime; gain.gain.setValueAtTime(0.1, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now+dur);
+    osc.start(); osc.stop(now+dur);
+  }
+  function playGood(){ if(state.sounds) setTone(els.sndGood, 'win'); }
+  function playBad(){ if(state.sounds) setTone(els.sndBad, 'bad'); }
+  function playFanfare(){ if(state.sounds) setTone(els.sndFanfare, 'fanfare'); }
+
+  /************
+   * SPEECH (US female preferred)
+   ************/
+  let voices=[];
+  function pickVoice(){
+    voices = speechSynthesis.getVoices();
+    // Prefer en-US female
+    let v = voices.find(v=>/en-US/i.test(v.lang) && /female/i.test(v.name))
+         || voices.find(v=>/en-US/i.test(v.lang))
+         || voices[0];
+    return v || null;
+  }
+  function speakWord(word){
+    if(!('speechSynthesis' in window)) return;
+    const utter = new SpeechSynthesisUtterance(word);
+    const v = pickVoice();
+    if(v) utter.voice = v;
+    utter.rate = 0.9; utter.pitch = 1.1; utter.lang = 'en-US';
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utter);
+  }
+  speechSynthesis.onvoiceschanged = ()=>{ voices = speechSynthesis.getVoices(); };
+
+  /************
+   * UTIL
+   ************/
+  const rand = (n)=> Math.floor(Math.random()*n);
+  function sampleUnique(arr, k, excludeSet){
+    const pool = arr.filter(w=>!excludeSet.has(w));
+    const need = Math.min(k, pool.length);
+    const out=[]; const seen=new Set();
+    while(out.length<need && pool.length){
+      const w = pool.splice(rand(pool.length),1)[0];
+      if(!seen.has(w)){ out.push(w); seen.add(w);} }
+    return out;
+  }
+  function clamp(n,min,max){ return Math.max(min, Math.min(max,n)); }
+
+  /************
+   * GAME FLOW
+   ************/
+  function startSession(){
+    state.index = 0; state.score = 0;
+    const level = state.currentLevel;
+    const historySet = new Set(state.profile.history||[]);
+    let picks = sampleUnique(WORDS[level], 5, historySet);
+    // if not enough unique due to huge history, softly drop oldest
+    if(picks.length<5){
+      state.profile.history = state.profile.history.slice(5); // free up a few
+      picks = picks.concat(sampleUnique(WORDS[level], 5-picks.length, new Set(state.profile.history)));
     }
-    return p;
+    state.session = picks;
+    els.progress.style.width = '0%';
+    els.scoreReadout.textContent = `Score: ${state.score}`;
+    renderWord();
   }
 
-  function setup() {
-    attempts = 3;
-    clueIndex = 0;
-    characters = [];
+  function renderWord(){
+    state.mistakes = 0; state.pointer = 0;
+    state.target = state.session[state.index];
+    state.revealed = Array.from({length: state.target.length}, ()=> '_');
+    els.mistakeReadout.textContent = `Mistakes: ${state.mistakes}/${state.target.length}`;
 
-    for (let i = 0; i < baseNames.length; i++) {
-      const area = areas[Math.floor(Math.random() * areas.length)];
-      const hue = Math.random() * 360;
-      const pos = placeCharacterNonOverlapping(area, characters);
-      characters.push({
-        name: baseNames[i],
-        job: jobs[i],
-        area: area,
-        x: pos.x,
-        y: pos.y,
-        color: `hsl(${hue}, 60%, 60%)`,
-        outline: `hsl(${hue}, 70%, 40%)`
-      });
+    const slots = state.revealed.map((ch,i)=>`<div class="slot underscore" data-i="${i}">${ch==='_'?'_':ch.toUpperCase()}</div>`).join('');
+    const html = `
+      <div class="row" style="align-items:center; justify-content:space-between">
+        <div class="pill">Word ${state.index+1} / 5</div>
+        <div class="controls">
+          <button class="icon-btn secondary" id="btnSpeak" aria-label="Hear the word"><span>🔊</span> Play</button>
+        </div>
+      </div>
+      <div class="word-slots" id="slots">${slots}</div>
+      <div class="stats">
+        <div>Type the letters in order</div>
+        <div class="kbd">A–Z</div>
+      </div>
+      <div class="controls" id="afterControls" style="display:none">
+        <button id="nextBtn">Next word ›</button>
+      </div>
+    `;
+    els.gameArea.innerHTML = html;
+    document.getElementById('btnSpeak').onclick = ()=> speakWord(state.target);
+    speakWord(state.target);
+  }
+
+  function finishWord(revealedCompletely){
+    // scoring: base = length - mistakes (min 0)
+    const base = Math.max(0, state.target.length - state.mistakes);
+    state.score += base;
+    els.scoreReadout.textContent = `Score: ${state.score}`;
+    const progressPct = ((state.index+1)/5)*100; els.progress.style.width = progressPct+"%";
+
+    // expose Next button
+    const ctl = document.getElementById('afterControls');
+    ctl.style.display = 'flex';
+    const nextBtn = document.getElementById('nextBtn');
+    nextBtn.onclick = ()=>{
+      state.profile.history.push(state.target);
+      if(state.profile.history.length>400) state.profile.history = state.profile.history.slice(-400);
+      if(state.index<4){ state.index++; renderWord(); saveAll(); }
+      else { endSession(); saveAll(); }
+    };
+
+    if(revealedCompletely) confettiBurst();
+  }
+
+  function endSession(){
+    const totalLen = state.session.reduce((a,w)=>a+w.length,0);
+    const pct = totalLen? Math.round((state.score/totalLen)*100):0;
+    let badge='novice', label='Novice';
+    if(pct>75){ badge='expert'; label='Expert'; }
+    else if(pct>50){ badge='proficient'; label='Proficient'; }
+    else if(pct>=25){ badge='competent'; label='Competent'; }
+
+    // Adaptive difficulty
+    if(state.adaptive){
+      const order = ['PKK','G12','G34','G56','G7P'];
+      let idx = order.indexOf(state.currentLevel);
+      if(pct>=80 && idx<order.length-1) idx++;
+      if(pct<40 && idx>0) idx--;
+      state.currentLevel = order[idx];
+      state.profile.level = state.currentLevel;
     }
 
-    saboteur = characters[Math.floor(Math.random() * characters.length)];
-
-    clues = generateClues(saboteur);
-    attemptsEl.textContent = `Attempts: ${attempts}`;
-    hintEl.textContent = 'Find the saboteur!';
-    footerEl.textContent = clues[0];
-    draw();
+    const html = `
+      <div class="row" style="justify-content:space-between; align-items:center">
+        <div class="title">Great job, ${state.profile.name}!</div>
+        <div class="badge ${badge}">Badge: ${label}</div>
+      </div>
+      <p>You scored <b>${state.score}</b> out of <b>${totalLen}</b> possible points (${pct}%).</p>
+      <div class="controls">
+        <button id="playAgain">Play Again</button>
+        <button class="secondary" id="switchPlayer">Switch Player</button>
+      </div>
+    `;
+    els.gameArea.innerHTML = html;
+    playFanfare();
+    document.getElementById('playAgain').onclick = ()=>{ startSession(); saveAll(); };
+    document.getElementById('switchPlayer').onclick = ()=>{ openStartModal(true); };
   }
 
-  function generateClues(s) {
-    const pool = [];
-    pool.push(`Seen near the ${s.area.name}.`);
-    pool.push(`Works as a ${s.job}.`);
-    pool.push(`Wearing ${s.color.replace('hsl','HSL')} clothing.`);
-    const nearest = areas
-      .map(a => ({ a, d: Math.hypot(s.x - a.x, s.y - a.y) }))
-      .sort((p, q) => p.d - q.d)[0].a.name;
-    pool.push(`Often closest to the ${nearest}.`);
-    pool.push(s.x < canvas.width / 2 ? 'Usually on the left side of the station.' : 'Usually on the right side of the station.');
-    pool.push(s.y < canvas.height / 2 ? 'Often spotted on the upper decks.' : 'Often spotted on the lower decks.');
-
-    const picked = [];
-    while (picked.length < 3 && pool.length) {
-      const idx = randInt(0, pool.length - 1);
-      picked.push(pool.splice(idx, 1)[0]);
-    }
-    if (!picked.some(c => c.includes('Works as'))) picked[0] = `Works as a ${s.job}.`;
-    if (!picked.some(c => c.includes('near the'))) picked[1] = `Seen near the ${s.area.name}.`;
-
-    return picked.map((c, i) => `Clue ${i+1}: ${c}`);
-  }
-
-  function drawAreas() {
-    ctx.font = '14px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    for (let area of areas) {
-      ctx.beginPath();
-      ctx.rect(area.x - 60, area.y - 60, 120, 120);
-      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
-      ctx.fillText(area.name, area.x, area.y - 70);
-    }
-  }
-
-  function drawNameLabel(text, x, y){
-    // Draw a clear, non-overlapping label above the circle
-    ctx.font = '12px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    const paddingX = 6, paddingY = 3;
-    const metrics = ctx.measureText(text);
-    const w = Math.ceil(metrics.width) + paddingX*2;
-    const h = 16 + paddingY*2;
-    const rx = x - w/2;
-    const ry = y - (RADIUS + 8) - h; // above the circle
-
-    // background rounded rect
-    ctx.beginPath();
-    const r = 6;
-    ctx.moveTo(rx + r, ry);
-    ctx.lineTo(rx + w - r, ry);
-    ctx.quadraticCurveTo(rx + w, ry, rx + w, ry + r);
-    ctx.lineTo(rx + w, ry + h - r);
-    ctx.quadraticCurveTo(rx + w, ry + h, rx + w - r, ry + h);
-    ctx.lineTo(rx + r, ry + h);
-    ctx.quadraticCurveTo(rx, ry + h, rx, ry + h - r);
-    ctx.lineTo(rx, ry + r);
-    ctx.quadraticCurveTo(rx, ry, rx + r, ry);
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(0,0,0,0.7)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // text
-    ctx.fillStyle = '#fff';
-    ctx.fillText(text, x, ry + h - paddingY - 4);
-  }
-
-  function drawCharacters() {
-    for (let c of characters) {
-      // Circle
-      ctx.beginPath();
-      ctx.arc(c.x, c.y, RADIUS, 0, Math.PI * 2);
-      ctx.fillStyle = c.color;
-      ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#000';
-      ctx.stroke();
-
-      // Name label for clarity
-      drawNameLabel(c.name, c.x, c.y);
-    }
-  }
-
-  function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawAreas();
-    drawCharacters();
-  }
-
-  function handleGuess(mx, my) {
-    for (let c of characters) {
-      const dx = mx - c.x;
-      const dy = my - c.y;
-      if (Math.hypot(dx, dy) <= RADIUS) {
-        if (c === saboteur) {
-          successJingle();
-          gameOver(true);
-        } else {
-          attempts--;
-          attemptsEl.textContent = `Attempts: ${attempts}`;
-          failBuzz();
-          if (attempts <= 0) {
-            gameOver(false);
-          } else {
-            clueIndex = Math.min(3 - attempts, 2); // 0,1,2
-            footerEl.textContent = clues[clueIndex];
-            hintEl.textContent = `Nope! ${attempts} attempt${attempts===1?'':'s'} left.`;
-          }
-        }
-        break;
+  /************
+   * INPUT HANDLERS
+   ************/
+  function handleLetter(raw){
+    if(state.index>4) return; // session ended
+    const letter = (raw||'').toLowerCase();
+    if(!letter || letter.length!==1 || letter<'a' || letter>'z') return;
+    const expected = state.target[state.pointer];
+    if(letter===expected){
+      state.revealed[state.pointer] = expected.toUpperCase();
+      state.pointer++;
+      playGood();
+      // Update slots
+      const slots = document.getElementById('slots');
+      if(slots){
+        const child = slots.children[state.pointer-1];
+        child.textContent = expected.toUpperCase();
+        child.classList.remove('underscore');
+      }
+      if(state.pointer>=state.target.length){
+        finishWord(true);
+      }
+    }else{
+      // mistake
+      state.mistakes++;
+      els.mistakeReadout.textContent = `Mistakes: ${state.mistakes}/${state.target.length}`;
+      playBad();
+      const slots = document.getElementById('slots');
+      if(slots) slots.classList.add('shake');
+      setTimeout(()=> slots && slots.classList.remove('shake'), 220);
+      // if max mistakes reached, reveal and finish
+      if(state.mistakes>=state.target.length){
+        revealAndFinish();
       }
     }
   }
 
-  function overlay(textTop, textBottom) {
-    ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.9)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 36px system-ui, sans-serif';
-    ctx.fillText(textTop, canvas.width/2, canvas.height/2 - 10);
-    ctx.font = '18px system-ui, sans-serif';
-    ctx.fillText(textBottom, canvas.width/2, canvas.height/2 + 24);
-    ctx.restore();
+  function revealAndFinish(){
+    const slots = document.getElementById('slots');
+    if(slots){
+      for(let i=0;i<state.target.length;i++){
+        const el = slots.children[i];
+        el.textContent = state.target[i].toUpperCase();
+        el.classList.remove('underscore');
+      }
+    }
+    finishWord(false);
   }
 
-  function gameOver(win) {
-    draw();
-    const top = win ? 'You found the saboteur!' : 'Out of attempts!';
-    const bottom = win ? `${saboteur.name} (${saboteur.job}) did it.` : `It was ${saboteur.name} (${saboteur.job}).`;
-    hintEl.textContent = win ? 'Nice work, detective.' : 'Better luck next time!';
-
-    setTimeout(() => { overlay(top, bottom); }, 1000);
-  }
-
-  canvas.addEventListener('click', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    handleGuess(mx, my);
+  document.addEventListener('keydown', (e)=>{
+    if(document.getElementById('startModal').style.display!=='none') return;
+    if(e.key && e.key.length===1){ handleLetter(e.key); }
   });
 
-  restartBtn.addEventListener('click', () => setup());
+  function buildOnscreenKb(){
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    // ABC layout: rows of 9
+    els.kb.innerHTML = letters.map(ch=>`<div class="key" data-k="${ch}">${ch}</div>`).join('');
+    els.kb.onclick = (e)=>{
+      const k = e.target.closest('.key'); if(!k) return;
+      handleLetter(k.dataset.k);
+    };
+  }
 
-  // Initial boot
-  setup();
+  /************
+   * CONFETTI (tiny)
+   ************/
+  function confettiBurst(){
+    const n=80; const box = els.gameArea.getBoundingClientRect();
+    for(let i=0;i<n;i++){
+      const p = document.createElement('div');
+      p.style.position='fixed'; p.style.left=(box.left+box.width/2)+'px'; p.style.top=(box.top+40)+'px';
+      p.style.width=p.style.height=(6+Math.random()*6)+'px';
+      p.style.background = `hsl(${Math.random()*360},90%,60%)`;
+      p.style.borderRadius='4px'; p.style.pointerEvents='none'; p.style.zIndex=9999; p.style.opacity=1;
+      document.body.appendChild(p);
+      const dx = (Math.random()-0.5)*6; const dy = (Math.random()-1.6)*8;
+      const g = 0.22;
+      let x=0,y=0,life=0;
+      const anim = ()=>{
+        life+=1; x+=dx; y+=dy; dy+=g; p.style.transform=`translate(${x*6}px, ${y*6}px) rotate(${life*12}deg)`; p.style.opacity = 1 - life/90;
+        if(life<90) requestAnimationFrame(anim); else p.remove();
+      }; anim();
+    }
+  }
+
+  /************
+   * SETTINGS TOGGLES
+   ************/
+  function applySettings(){
+    document.body.classList.toggle('dyslexic', !!state.profile?.settings?.dys);
+    document.body.classList.toggle('high-contrast', !!state.profile?.settings?.hc);
+    document.body.classList.toggle('larger-text', !!state.profile?.settings?.big);
+    state.sounds = !!state.profile?.settings?.sound;
+    state.adaptive = !!state.profile?.settings?.adaptive;
+
+    els.toggleDys.checked = !!state.profile?.settings?.dys;
+    els.toggleContrast.checked = !!state.profile?.settings?.hc;
+    els.toggleBigText.checked = !!state.profile?.settings?.big;
+    els.toggleSound.checked = !!state.profile?.settings?.sound;
+    els.toggleAdaptive.checked = !!state.profile?.settings?.adaptive;
+  }
+
+  els.toggleDys.onchange = ()=>{ state.profile.settings.dys = els.toggleDys.checked; applySettings(); saveAll(); };
+  els.toggleContrast.onchange = ()=>{ state.profile.settings.hc = els.toggleContrast.checked; applySettings(); saveAll(); };
+  els.toggleBigText.onchange = ()=>{ state.profile.settings.big = els.toggleBigText.checked; applySettings(); saveAll(); };
+  els.toggleSound.onchange = ()=>{ state.profile.settings.sound = els.toggleSound.checked; applySettings(); saveAll(); };
+  els.toggleAdaptive.onchange = ()=>{ state.profile.settings.adaptive = els.toggleAdaptive.checked; applySettings(); saveAll(); };
+
+  /************
+   * START MODAL / PROFILES
+   ************/
+  function openStartModal(switching=false){
+    refreshProfileList();
+    els.startModal.style.display='grid';
+    if(!switching){ els.name.value=''; els.age.value=''; }
+  }
+
+  els.profileSel.onchange = ()=>{
+    const v = els.profileSel.value;
+    if(v){
+      const p = state.profiles[v];
+      els.name.value = p.name;
+      els.age.value = p.age || '';
+    }
+  };
+
+  els.resetData.onclick = ()=>{
+    if(confirm('Erase all local players and progress?')){
+      localStorage.removeItem(LS_KEY);
+      location.reload();
+    }
+  };
+
+  els.startBtn.onclick = ()=>{
+    const name = (els.name.value||'').trim();
+    const age = parseInt(els.age.value,10);
+    const pick = els.profileSel.value;
+
+    if(pick){
+      state.profile = state.profiles[pick];
+    } else {
+      if(!name || !(age>=4 && age<=17)){
+        alert('Please enter a name and an age between 4 and 17.');
+        return;
+      }
+      state.profile = ensureProfile(name);
+      state.profile.age = age;
+      state.profile.level = LEVEL_FROM_AGE(age);
+      if(!state.profile.settings){ state.profile.settings = {dys:false,hc:false,big:false,sound:true,adaptive:true}; }
+    }
+
+    state.currentLevel = state.profile.level || LEVEL_FROM_AGE(state.profile.age||8);
+    els.levelPill.textContent = `Level: ${state.currentLevel}`;
+    els.profilePill.textContent = `${state.profile.name} · Age ${state.profile.age||'?'} · ${state.currentLevel}`;
+    applySettings();
+    saveAll();
+
+    els.startModal.style.display='none';
+    buildOnscreenKb();
+    startSession();
+  };
+
+  /************
+   * INIT
+   ************/
+  function init(){
+    const all = loadAll(); state.profiles = all.profiles || {};
+    refreshProfileList();
+    openStartModal();
+  }
+  init();
   </script>
 </body>
 </html>
