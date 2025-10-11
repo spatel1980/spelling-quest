@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Space Saboteur Game</title>
+  <style>
+    html, body { margin:0; padding:0; background:#000; color:#fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    #info { position: fixed; top: 8px; left: 8px; right: 8px; display:flex; gap:12px; align-items:center; z-index: 2; }
+    .pill { background: rgba(255,255,255,0.08); padding:6px 10px; border-radius: 999px; font-size: 14px; }
+    #footer { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px; font-size: 16px; color: #ffe57f; background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.6) 40%, rgba(0,0,0,0.85) 100%); z-index: 2; }
+    #game { display:block; margin: 0 auto; }
+    #restart { position: fixed; top: 8px; right: 8px; background:#222; color:#fff; border:1px solid #444; padding:6px 10px; border-radius:8px; cursor:pointer; z-index: 2; }
+    #restart:hover { background:#2b2b2b; }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <div class="pill" id="attempts">Attempts: 3</div>
+    <div class="pill" id="hint">Click a character to guess.</div>
+  </div>
+  <button id="restart" title="Restart (same page)">Restart</button>
+  <div id="footer">Clue will appear here before each attempt.</div>
+  <canvas id="game" width="800" height="600"></canvas>
+
+  <script>
+  // Space Saboteur Game — 7 characters, 3 attempts, 3 clues
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const attemptsEl = document.getElementById('attempts');
+  const hintEl = document.getElementById('hint');
+  const footerEl = document.getElementById('footer');
+  const restartBtn = document.getElementById('restart');
+
+  function randInt(min, max){ return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+  const areas = [
+    { name: 'Control Room', x: 120, y: 120 },
+    { name: 'Engine Room',  x: 680, y: 120 },
+    { name: 'Living Quarters', x: 120, y: 480 },
+    { name: 'Cargo Bay', x: 680, y: 480 },
+    { name: 'Med Bay', x: 400, y: 300 }
+  ];
+
+  const baseNames = ['Alex', 'Blair', 'Casey', 'Dana', 'Eli', 'Finley', 'Gray'];
+  const jobs = ['Engineer', 'Pilot', 'Medic', 'Scientist', 'Guard', 'Cook', 'Technician'];
+
+  const RADIUS = 18;                 // character circle radius
+  const MIN_DIST = RADIUS * 2 + 6;   // minimum center-to-center distance to avoid overlap
+
+  // --- Simple WebAudio beeps (no external files) ---
+  let audioCtx;
+  function initAudio(){ if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+  function beep(freq = 440, dur = 0.15, type = 'sine', gain = 0.04){
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = type; osc.frequency.value = freq;
+    g.gain.value = gain;
+    osc.connect(g).connect(audioCtx.destination);
+    osc.start();
+    setTimeout(() => { osc.stop(); }, dur * 1000);
+  }
+  function successJingle(){
+    // little rising triad
+    initAudio();
+    const now = audioCtx.currentTime;
+    const seq = [523.25, 659.25, 783.99]; // C5, E5, G5
+    seq.forEach((f,i)=>{
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = 'triangle'; osc.frequency.value = f;
+      g.gain.value = 0.05;
+      osc.connect(g).connect(audioCtx.destination);
+      osc.start(now + i*0.08);
+      osc.stop(now + i*0.08 + 0.17);
+    });
+  }
+  function failBuzz(){
+    // descending buzz
+    initAudio();
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(260, now);
+    osc.frequency.exponentialRampToValueAtTime(120, now + 0.25);
+    g.gain.value = 0.04;
+    osc.connect(g).connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.28);
+  }
+
+  let characters = [];
+  let saboteur = null;
+  let attempts = 3;
+  let clueIndex = 0;
+  let clues = [];
+
+  function randomPointInArea(area){
+    // keep some padding from the box edges so names fit
+    const PAD = 24;
+    const x = randInt(area.x - 60 + PAD, area.x + 60 - PAD);
+    const y = randInt(area.y - 60 + PAD, area.y + 60 - PAD);
+    return {x,y};
+  }
+
+  function isFarFromOthers(x, y, list){
+    return list.every(o => Math.hypot(x - o.x, y - o.y) >= MIN_DIST);
+  }
+
+  function placeCharacterNonOverlapping(area, placed){
+    // Try multiple times to find a non-overlapping spot inside the area box
+    for (let tries = 0; tries < 100; tries++) {
+      const p = randomPointInArea(area);
+      if (isFarFromOthers(p.x, p.y, placed)) return p;
+    }
+    // Fallback: slightly jitter until it fits (extremely unlikely to need)
+    let p = randomPointInArea(area);
+    let jitter = 0;
+    while (!isFarFromOthers(p.x, p.y, placed) && jitter < 200) {
+      p.x += randInt(-2,2); p.y += randInt(-2,2); jitter++;
+    }
+    return p;
+  }
+
+  function setup() {
+    attempts = 3;
+    clueIndex = 0;
+    characters = [];
+
+    for (let i = 0; i < baseNames.length; i++) {
+      const area = areas[Math.floor(Math.random() * areas.length)];
+      const hue = Math.random() * 360;
+      const pos = placeCharacterNonOverlapping(area, characters);
+      characters.push({
+        name: baseNames[i],
+        job: jobs[i],
+        area: area,
+        x: pos.x,
+        y: pos.y,
+        color: `hsl(${hue}, 60%, 60%)`,
+        outline: `hsl(${hue}, 70%, 40%)`
+      });
+    }
+
+    saboteur = characters[Math.floor(Math.random() * characters.length)];
+
+    clues = generateClues(saboteur);
+    attemptsEl.textContent = `Attempts: ${attempts}`;
+    hintEl.textContent = 'Find the saboteur!';
+    footerEl.textContent = clues[0];
+    draw();
+  }
+
+  function generateClues(s) {
+    const pool = [];
+    pool.push(`Seen near the ${s.area.name}.`);
+    pool.push(`Works as a ${s.job}.`);
+    pool.push(`Wearing ${s.color.replace('hsl','HSL')} clothing.`);
+    const nearest = areas
+      .map(a => ({ a, d: Math.hypot(s.x - a.x, s.y - a.y) }))
+      .sort((p, q) => p.d - q.d)[0].a.name;
+    pool.push(`Often closest to the ${nearest}.`);
+    pool.push(s.x < canvas.width / 2 ? 'Usually on the left side of the station.' : 'Usually on the right side of the station.');
+    pool.push(s.y < canvas.height / 2 ? 'Often spotted on the upper decks.' : 'Often spotted on the lower decks.');
+
+    const picked = [];
+    while (picked.length < 3 && pool.length) {
+      const idx = randInt(0, pool.length - 1);
+      picked.push(pool.splice(idx, 1)[0]);
+    }
+    if (!picked.some(c => c.includes('Works as'))) picked[0] = `Works as a ${s.job}.`;
+    if (!picked.some(c => c.includes('near the'))) picked[1] = `Seen near the ${s.area.name}.`;
+
+    return picked.map((c, i) => `Clue ${i+1}: ${c}`);
+  }
+
+  function drawAreas() {
+    ctx.font = '14px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    for (let area of areas) {
+      ctx.beginPath();
+      ctx.rect(area.x - 60, area.y - 60, 120, 120);
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fillText(area.name, area.x, area.y - 70);
+    }
+  }
+
+  function drawNameLabel(text, x, y){
+    // Draw a clear, non-overlapping label above the circle
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    const paddingX = 6, paddingY = 3;
+    const metrics = ctx.measureText(text);
+    const w = Math.ceil(metrics.width) + paddingX*2;
+    const h = 16 + paddingY*2;
+    const rx = x - w/2;
+    const ry = y - (RADIUS + 8) - h; // above the circle
+
+    // background rounded rect
+    ctx.beginPath();
+    const r = 6;
+    ctx.moveTo(rx + r, ry);
+    ctx.lineTo(rx + w - r, ry);
+    ctx.quadraticCurveTo(rx + w, ry, rx + w, ry + r);
+    ctx.lineTo(rx + w, ry + h - r);
+    ctx.quadraticCurveTo(rx + w, ry + h, rx + w - r, ry + h);
+    ctx.lineTo(rx + r, ry + h);
+    ctx.quadraticCurveTo(rx, ry + h, rx, ry + h - r);
+    ctx.lineTo(rx, ry + r);
+    ctx.quadraticCurveTo(rx, ry, rx + r, ry);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // text
+    ctx.fillStyle = '#fff';
+    ctx.fillText(text, x, ry + h - paddingY - 4);
+  }
+
+  function drawCharacters() {
+    for (let c of characters) {
+      // Circle
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = c.color;
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#000';
+      ctx.stroke();
+
+      // Name label for clarity
+      drawNameLabel(c.name, c.x, c.y);
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawAreas();
+    drawCharacters();
+  }
+
+  function handleGuess(mx, my) {
+    for (let c of characters) {
+      const dx = mx - c.x;
+      const dy = my - c.y;
+      if (Math.hypot(dx, dy) <= RADIUS) {
+        if (c === saboteur) {
+          successJingle();
+          gameOver(true);
+        } else {
+          attempts--;
+          attemptsEl.textContent = `Attempts: ${attempts}`;
+          failBuzz();
+          if (attempts <= 0) {
+            gameOver(false);
+          } else {
+            clueIndex = Math.min(3 - attempts, 2); // 0,1,2
+            footerEl.textContent = clues[clueIndex];
+            hintEl.textContent = `Nope! ${attempts} attempt${attempts===1?'':'s'} left.`;
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  function overlay(textTop, textBottom) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.9)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 36px system-ui, sans-serif';
+    ctx.fillText(textTop, canvas.width/2, canvas.height/2 - 10);
+    ctx.font = '18px system-ui, sans-serif';
+    ctx.fillText(textBottom, canvas.width/2, canvas.height/2 + 24);
+    ctx.restore();
+  }
+
+  function gameOver(win) {
+    draw();
+    const top = win ? 'You found the saboteur!' : 'Out of attempts!';
+    const bottom = win ? `${saboteur.name} (${saboteur.job}) did it.` : `It was ${saboteur.name} (${saboteur.job}).`;
+    hintEl.textContent = win ? 'Nice work, detective.' : 'Better luck next time!';
+
+    setTimeout(() => { overlay(top, bottom); }, 1000);
+  }
+
+  canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    handleGuess(mx, my);
+  });
+
+  restartBtn.addEventListener('click', () => setup());
+
+  // Initial boot
+  setup();
+  </script>
+</body>
+</html>
