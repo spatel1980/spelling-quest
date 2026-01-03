@@ -235,6 +235,7 @@
     target:'',
     pointer:0,
     newAchievements:[], // achievements earned this session
+    wordFinished:false, // flag to stop counting mistakes after word is done
   };
 
   const els = {
@@ -470,7 +471,7 @@
   }
 
   function renderWord(){
-    state.mistakes = 0; state.pointer = 0; state.correctAttempts = 0;
+    state.mistakes = 0; state.pointer = 0; state.correctAttempts = 0; state.wordFinished = false;
     state.target = state.session[state.index];
     state.revealed = Array.from({length: state.target.length}, ()=> '_');
     els.mistakeReadout.textContent = `Mistakes: ${state.mistakes}/${state.target.length}`;
@@ -507,6 +508,9 @@
   }
 
   function finishWord(revealedCompletely){
+    // Mark word as finished to stop counting further mistakes
+    state.wordFinished = true;
+
     // scoring: base = length - mistakes (min 0)
     const base = Math.max(0, state.target.length - state.mistakes);
     state.score += base;
@@ -657,6 +661,7 @@
    ************/
   function handleLetter(raw){
     if(state.index>4) return; // session ended
+    if(state.wordFinished) return; // word already finished, stop processing input
     const letter = (raw||'').toLowerCase();
     if(!letter || letter.length!==1 || letter<'a' || letter>'z') return;
     const expected = state.target[state.pointer];
