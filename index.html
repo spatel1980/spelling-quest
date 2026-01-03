@@ -45,8 +45,11 @@
 
     .game-card{display:grid; gap:18px}
     .word-slots{display:flex; gap:10px; justify-content:center; flex-wrap:wrap}
-    .slot{width:44px; height:64px; border-radius:12px; background:var(--card); display:grid; place-items:center; font-size:28px; font-weight:800; box-shadow:inset 0 -3px 0 rgba(99,102,241,.25)}
+    .slot{width:44px; height:64px; border-radius:12px; background:var(--card); display:grid; place-items:center; font-size:28px; font-weight:800; box-shadow:inset 0 -3px 0 rgba(99,102,241,.25); transition:all var(--trans)}
     .slot.underscore{color:#94a3b8}
+    .slot.active{background:var(--brand); color:#fff; box-shadow:0 0 0 3px var(--brand-2), inset 0 -3px 0 rgba(0,0,0,.25); transform:scale(1.1)}
+    .slot.correct{background:#dcfce7; color:var(--ok); box-shadow:inset 0 -3px 0 rgba(22,163,74,.25)}
+    .slot.incorrect{background:#fee2e2; color:var(--bad); box-shadow:inset 0 -3px 0 rgba(239,68,68,.25)}
     .shake{animation:shake .3s}
     @keyframes shake{ 10%{transform:translateX(-4px)} 30%{transform:translateX(4px)} 50%{transform:translateX(-3px)} 70%{transform:translateX(3px)} 100%{transform:translateX(0)} }
 
@@ -80,6 +83,14 @@
     .badge.competent{background:#d1fae5; color:#065f46}
     .badge.proficient{background:#e0e7ff; color:#3730a3}
     .badge.expert{background:#dcfce7; color:#065f46}
+
+    .achievement{background:var(--card); border:2px solid var(--brand); border-radius:12px; padding:12px 16px; display:flex; align-items:center; gap:10px; margin:8px 0; animation:slideIn .4s}
+    @keyframes slideIn{ from{transform:translateX(-20px); opacity:0} to{transform:translateX(0); opacity:1} }
+    .achievement .icon{font-size:32px}
+    .word-review{display:grid; gap:8px; margin:12px 0}
+    .review-item{display:flex; justify-content:space-between; align-items:center; padding:10px; background:var(--card); border-radius:8px}
+    .review-word{font-weight:800; font-size:18px}
+    .review-def{color:var(--muted); font-size:14px; font-style:italic}
 
     .sr{position:absolute; left:-9999px}
 
@@ -206,6 +217,24 @@
     return 'G7P';
   };
 
+  // Simple word definitions (subset - can be expanded)
+  const DEFINITIONS = {
+    cat: 'a small furry pet that says meow', dog: 'a friendly pet that barks', run: 'to move fast on your feet',
+    sun: 'the bright star in the sky', fun: 'something enjoyable', jump: 'to leap into the air',
+    ship: 'a large boat', fish: 'an animal that lives in water', tree: 'a tall plant with leaves',
+    bird: 'an animal with wings that flies', book: 'pages with words to read', milk: 'a white drink',
+    about: 'concerning or regarding', friend: 'someone you like spending time with', happy: 'feeling joy',
+    school: 'a place to learn', animal: 'a living creature', family: 'people related to you',
+    water: 'clear liquid you drink', mountain: 'a very tall hill', ocean: 'a huge body of salt water',
+    bicycle: 'a two-wheeled vehicle you pedal', discover: 'to find something new', science: 'study of nature',
+    solution: 'an answer to a problem', evidence: 'proof that shows something is true',
+    creative: 'good at making new things', ancient: 'very old', achieve: 'to succeed at something',
+    // Add default for words without definitions
+    _default: 'a word to spell correctly'
+  };
+
+  const getDefinition = (word)=> DEFINITIONS[word.toLowerCase()] || DEFINITIONS._default;
+
   /************
    * STATE
    ************/
@@ -214,14 +243,17 @@
     profiles:{},
     currentLevel:'PKK',
     session:[], // words for this game (5)
+    sessionResults:[], // track results for each word {word, correct, incorrect, perfect}
     index:0,
     score:0,
     sounds:true,
     adaptive:true,
     mistakes:0,
+    correctAttempts:0, // letters correct on first try
     revealed:[],
     target:'',
     pointer:0,
+    newAchievements:[], // achievements earned this session
   };
 
   const els = {
@@ -258,12 +290,34 @@
    ************/
   const LS_KEY = 'spellingQuest.v1';
   function loadAll(){
-    try{ return JSON.parse(localStorage.getItem(LS_KEY)) || {profiles:{}} }catch(e){ return {profiles:{}} }
+    try{
+      return JSON.parse(localStorage.getItem(LS_KEY)) || {profiles:{}}
+    }catch(e){
+      console.error('Failed to load profiles:', e);
+      return {profiles:{}}
+    }
   }
-  function saveAll(){ localStorage.setItem(LS_KEY, JSON.stringify({profiles:state.profiles})) }
+  function saveAll(){
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify({profiles:state.profiles}));
+    } catch(e) {
+      console.error('Failed to save profiles:', e);
+      if(e.name === 'QuotaExceededError') {
+        alert('Storage full! Your progress may not be saved. Try deleting old player profiles.');
+      }
+    }
+  }
   function ensureProfile(name){
     if(!state.profiles[name]){
-      state.profiles[name] = { name, age: null, level: 'PKK', history: [], settings: { dys:false, hc:false, big:false, sound:true, adaptive:true } };
+      state.profiles[name] = {
+        name, age: null, level: 'PKK', history: [],
+        settings: { dys:false, hc:false, big:false, sound:true, adaptive:true },
+        achievements: { perfectWords:0, streak:0, bestStreak:0, sessionsPlayed:0, wordsSpelled:0, levelUps:0 }
+      };
+    }
+    // Ensure achievements exist for existing profiles
+    if(!state.profiles[name].achievements){
+      state.profiles[name].achievements = { perfectWords:0, streak:0, bestStreak:0, sessionsPlayed:0, wordsSpelled:0, levelUps:0 };
     }
     return state.profiles[name];
   }
@@ -278,20 +332,32 @@
    ************/
   let __AUDIO_CTX__ = null;
   function getAudioCtx(){
-    if(!__AUDIO_CTX__) __AUDIO_CTX__ = new (window.AudioContext||window.webkitAudioContext)();
+    if(!__AUDIO_CTX__) {
+      try {
+        __AUDIO_CTX__ = new (window.AudioContext||window.webkitAudioContext)();
+      } catch(e) {
+        console.error('AudioContext not supported:', e);
+        return null;
+      }
+    }
     return __AUDIO_CTX__;
   }
   function setTone(el, type){
     // Reuse a single AudioContext to avoid degradation/leaks on some PCs
     const ctx = getAudioCtx();
-    const dur = type==='win'?0.25: type==='fanfare'?0.6: 0.18;
-    const freq = type==='bad'?220: type==='win'?660: 880;
-    const osc = ctx.createOscillator(); const gain = ctx.createGain();
-    osc.type = 'sine'; osc.frequency.value = freq; gain.gain.value=0.001;
-    osc.connect(gain); gain.connect(ctx.destination);
-    const now = ctx.currentTime; gain.gain.setValueAtTime(0.08, now);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now+dur);
-    osc.start(); osc.stop(now+dur);
+    if(!ctx) return; // Audio not supported
+    try {
+      const dur = type==='win'?0.25: type==='fanfare'?0.6: 0.18;
+      const freq = type==='bad'?220: type==='win'?660: 880;
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.type = 'sine'; osc.frequency.value = freq; gain.gain.value=0.001;
+      osc.connect(gain); gain.connect(ctx.destination);
+      const now = ctx.currentTime; gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now+dur);
+      osc.start(); osc.stop(now+dur);
+    } catch(e) {
+      console.error('Audio playback failed:', e);
+    }
   }
   function playGood(){ if(state.sounds) setTone(els.sndGood, 'win'); }
   function playBad(){ if(state.sounds) setTone(els.sndBad, 'bad'); }
@@ -304,9 +370,13 @@
     voices: [],
     current: null,
     counter: 0,
-    cooldown: false,
+    queue: [],
+    speaking: false,
+    voiceLoadAttempts: 0,
     chooseVoice(){
-      if(!this.voices || !this.voices.length) this.voices = speechSynthesis.getVoices();
+      if(!this.voices || !this.voices.length) {
+        this.voices = speechSynthesis.getVoices();
+      }
       const prefer = [/female/i, /Samantha/i, /Allison/i, /Aria/i, /Jenny/i, /Google US English/i];
       let v = this.voices.find(v=>/en-US/i.test(v.lang) && prefer.some(r=>r.test(v.name)))
            || this.voices.find(v=>/en-US/i.test(v.lang))
@@ -314,23 +384,72 @@
       return v || null;
     },
     init(){
-      this.voices = speechSynthesis.getVoices();
-      this.current = this.chooseVoice();
-      speechSynthesis.onvoiceschanged = ()=>{ this.voices = speechSynthesis.getVoices(); this.current = this.chooseVoice(); };
-      document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ try{ speechSynthesis.cancel(); }catch(e){} } });
+      if(!('speechSynthesis' in window)) {
+        console.warn('Speech synthesis not supported');
+        return;
+      }
+      this.loadVoices();
+      speechSynthesis.onvoiceschanged = ()=>{ this.loadVoices(); };
+      document.addEventListener('visibilitychange', ()=>{
+        if(document.hidden){
+          try{ speechSynthesis.cancel(); this.queue=[]; this.speaking=false; }catch(e){}
+        }
+      });
     },
-    speak(word){
-      if(!('speechSynthesis' in window)) return;
-      if(this.cooldown) return; // debounce rapid taps
-      this.cooldown = true; setTimeout(()=> this.cooldown=false, 350);
-      try{ speechSynthesis.cancel(); }catch(e){}
-      const u = new SpeechSynthesisUtterance(word);
-      const v = this.current || this.chooseVoice();
-      if(v) u.voice = v;
-      u.lang = 'en-US'; u.rate = 0.95; u.pitch = 1.05; u.volume = 1;
-      u.onend = ()=>{ this.counter++; if(this.counter % 30 === 0){ try{ speechSynthesis.cancel(); }catch(e){} } };
-      u.onerror = ()=>{ try{ speechSynthesis.cancel(); }catch(e){} };
-      speechSynthesis.speak(u);
+    loadVoices(){
+      this.voices = speechSynthesis.getVoices();
+      if(this.voices.length > 0) {
+        this.current = this.chooseVoice();
+        this.voiceLoadAttempts = 0;
+      } else if(this.voiceLoadAttempts < 3) {
+        // Retry loading voices (race condition fix)
+        this.voiceLoadAttempts++;
+        setTimeout(()=> this.loadVoices(), 100);
+      }
+    },
+    speak(word, callback){
+      if(!('speechSynthesis' in window)) {
+        if(callback) callback();
+        return;
+      }
+      // Queue system instead of discarding
+      this.queue.push({word, callback});
+      if(!this.speaking) this.processQueue();
+    },
+    processQueue(){
+      if(this.queue.length === 0) {
+        this.speaking = false;
+        return;
+      }
+      this.speaking = true;
+      const {word, callback} = this.queue.shift();
+
+      try{
+        speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(word);
+        const v = this.current || this.chooseVoice();
+        if(v) u.voice = v;
+        u.lang = 'en-US'; u.rate = 0.95; u.pitch = 1.05; u.volume = 1;
+        u.onend = ()=>{
+          this.counter++;
+          if(this.counter % 30 === 0){
+            try{ speechSynthesis.cancel(); }catch(e){}
+          }
+          if(callback) callback();
+          setTimeout(()=> this.processQueue(), 100);
+        };
+        u.onerror = (e)=>{
+          console.error('Speech error:', e);
+          try{ speechSynthesis.cancel(); }catch(err){}
+          if(callback) callback();
+          setTimeout(()=> this.processQueue(), 100);
+        };
+        speechSynthesis.speak(u);
+      }catch(e){
+        console.error('Speech failed:', e);
+        if(callback) callback();
+        setTimeout(()=> this.processQueue(), 100);
+      }
     }
   };
   Speech.init();
@@ -354,7 +473,7 @@
    * GAME FLOW
    ************/
   function startSession(){
-    state.index = 0; state.score = 0;
+    state.index = 0; state.score = 0; state.sessionResults = []; state.newAchievements = [];
     const level = state.currentLevel;
     const historySet = new Set(state.profile.history||[]);
     let picks = sampleUnique(WORDS[level], 5, historySet);
@@ -370,12 +489,15 @@
   }
 
   function renderWord(){
-    state.mistakes = 0; state.pointer = 0;
+    state.mistakes = 0; state.pointer = 0; state.correctAttempts = 0;
     state.target = state.session[state.index];
     state.revealed = Array.from({length: state.target.length}, ()=> '_');
     els.mistakeReadout.textContent = `Mistakes: ${state.mistakes}/${state.target.length}`;
 
-    const slots = state.revealed.map((ch,i)=>`<div class="slot underscore" data-i="${i}">${ch==='_'?'_':ch.toUpperCase()}</div>`).join('');
+    const slots = state.revealed.map((ch,i)=>{
+      const isActive = i === 0 ? ' active' : '';
+      return `<div class="slot underscore${isActive}" data-i="${i}">${ch==='_'?'_':ch.toUpperCase()}</div>`;
+    }).join('');
     const html = `
       <div class="row" style="align-items:center; justify-content:space-between">
         <div class="pill">Word ${state.index+1} / 5</div>
@@ -395,7 +517,10 @@
     els.gameArea.innerHTML = html;
     (function(){
       const speakBtn = document.getElementById('btnSpeak');
-      speakBtn.onclick = ()=>{ speakBtn.disabled = true; Speech.speak(state.target, ()=>{ setTimeout(()=> speakBtn.disabled = false, 100); }); };
+      speakBtn.onclick = ()=>{
+        speakBtn.disabled = true;
+        Speech.speak(state.target, ()=>{ setTimeout(()=> speakBtn.disabled = false, 100); });
+      };
     })();
     Speech.speak(state.target);
   }
@@ -404,8 +529,35 @@
     // scoring: base = length - mistakes (min 0)
     const base = Math.max(0, state.target.length - state.mistakes);
     state.score += base;
+    const isPerfect = state.mistakes === 0 && revealedCompletely;
+
+    // Save word result
+    state.sessionResults.push({
+      word: state.target,
+      correct: state.correctAttempts,
+      incorrect: state.mistakes,
+      perfect: isPerfect,
+      definition: getDefinition(state.target)
+    });
+
+    // Track perfect word achievement
+    if(isPerfect) {
+      state.profile.achievements.perfectWords++;
+    }
+
     els.scoreReadout.textContent = `Score: ${state.score}`;
     const progressPct = ((state.index+1)/5)*100; els.progress.style.width = progressPct+"%";
+
+    // Show definition and partial credit
+    const def = getDefinition(state.target);
+    const creditText = `${state.correctAttempts}/${state.target.length} correct${isPerfect ? ' - Perfect! 🌟' : ''}`;
+    const defHTML = `
+      <div style="background:var(--card); padding:12px; border-radius:8px; margin:12px 0">
+        <div style="font-weight:700; color:var(--brand); margin-bottom:6px">${creditText}</div>
+        <div style="font-style:italic; color:var(--muted)">"${state.target}" - ${def}</div>
+      </div>
+    `;
+    document.getElementById('slots').insertAdjacentHTML('afterend', defHTML);
 
     // expose Next button
     const ctl = document.getElementById('afterControls');
@@ -429,15 +581,76 @@
     else if(pct>50){ badge='proficient'; label='Proficient'; }
     else if(pct>=25){ badge='competent'; label='Competent'; }
 
+    // Update achievements
+    state.profile.achievements.sessionsPlayed++;
+    state.profile.achievements.wordsSpelled += 5;
+
+    // Check for streak
+    const perfectCount = state.sessionResults.filter(r=>r.perfect).length;
+    if(perfectCount === 5) {
+      state.profile.achievements.streak++;
+      if(state.profile.achievements.streak > state.profile.achievements.bestStreak) {
+        state.profile.achievements.bestStreak = state.profile.achievements.streak;
+      }
+      state.newAchievements.push({icon:'🔥', title:'Perfect Session!', desc:'All 5 words spelled perfectly'});
+    } else {
+      state.profile.achievements.streak = 0;
+    }
+
+    // Check for level up achievement
+    const oldLevel = state.currentLevel;
+
     // Adaptive difficulty
     if(state.adaptive){
       const order = ['PKK','G12','G34','G56','G7P'];
       let idx = order.indexOf(state.currentLevel);
-      if(pct>=80 && idx<order.length-1) idx++;
+      if(pct>=80 && idx<order.length-1) {
+        idx++;
+        state.profile.achievements.levelUps++;
+        state.newAchievements.push({icon:'⬆️', title:'Level Up!', desc:`Advanced to ${order[idx]}`});
+      }
       if(pct<40 && idx>0) idx--;
       state.currentLevel = order[idx];
       state.profile.level = state.currentLevel;
     }
+
+    // Milestone achievements
+    if(state.profile.achievements.wordsSpelled === 50) {
+      state.newAchievements.push({icon:'📚', title:'Word Scholar', desc:'Spelled 50 words!'});
+    }
+    if(state.profile.achievements.wordsSpelled === 100) {
+      state.newAchievements.push({icon:'🎓', title:'Spelling Master', desc:'Spelled 100 words!'});
+    }
+
+    // Build word review
+    const reviewHTML = state.sessionResults.map(r=>{
+      const statusIcon = r.perfect ? '🌟' : r.correct >= r.word.length/2 ? '✓' : '○';
+      return `
+        <div class="review-item">
+          <div>
+            <div class="review-word">${statusIcon} ${r.word}</div>
+            <div class="review-def">${r.definition}</div>
+          </div>
+          <div style="color:var(--muted); font-weight:600">${r.correct}/${r.word.length}</div>
+        </div>
+      `;
+    }).join('');
+
+    // Build achievements HTML
+    const achievementsHTML = state.newAchievements.length > 0 ? `
+      <div style="margin:16px 0">
+        <h3 style="margin:8px 0">🏆 Achievements Unlocked!</h3>
+        ${state.newAchievements.map(a=>`
+          <div class="achievement">
+            <div class="icon">${a.icon}</div>
+            <div>
+              <div style="font-weight:800">${a.title}</div>
+              <div style="color:var(--muted); font-size:14px">${a.desc}</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    ` : '';
 
     const html = `
       <div class="row" style="justify-content:space-between; align-items:center">
@@ -445,6 +658,14 @@
         <div class="badge ${badge}">Badge: ${label}</div>
       </div>
       <p>You scored <b>${state.score}</b> out of <b>${totalLen}</b> possible points (${pct}%).</p>
+      ${achievementsHTML}
+      <div style="margin:16px 0">
+        <h3 style="margin:8px 0">📝 Session Review</h3>
+        <div class="word-review">${reviewHTML}</div>
+      </div>
+      <div style="color:var(--muted); font-size:14px; margin:12px 0">
+        Total stats: ${state.profile.achievements.wordsSpelled} words spelled, ${state.profile.achievements.perfectWords} perfect, best streak: ${state.profile.achievements.bestStreak}
+      </div>
       <div class="controls">
         <button id="playAgain">Play Again</button>
         <button class="secondary" id="switchPlayer">Switch Player</button>
@@ -464,17 +685,29 @@
     const letter = (raw||'').toLowerCase();
     if(!letter || letter.length!==1 || letter<'a' || letter>'z') return;
     const expected = state.target[state.pointer];
+    const slots = document.getElementById('slots');
+
     if(letter===expected){
       state.revealed[state.pointer] = expected.toUpperCase();
+      state.correctAttempts++;
+      const currentPos = state.pointer;
       state.pointer++;
       playGood();
-      // Update slots
-      const slots = document.getElementById('slots');
+
+      // Update current slot - mark as correct
       if(slots){
-        const child = slots.children[state.pointer-1];
+        const child = slots.children[currentPos];
         child.textContent = expected.toUpperCase();
-        child.classList.remove('underscore');
+        child.classList.remove('underscore', 'active');
+        child.classList.add('correct');
+
+        // Move active highlight to next slot
+        if(state.pointer < state.target.length) {
+          const nextChild = slots.children[state.pointer];
+          nextChild.classList.add('active');
+        }
       }
+
       if(state.pointer>=state.target.length){
         finishWord(true);
       }
@@ -483,9 +716,22 @@
       state.mistakes++;
       els.mistakeReadout.textContent = `Mistakes: ${state.mistakes}/${state.target.length}`;
       playBad();
-      const slots = document.getElementById('slots');
+
+      // Flash the current slot red briefly
+      if(slots){
+        const child = slots.children[state.pointer];
+        const wasActive = child.classList.contains('active');
+        child.classList.remove('active');
+        child.classList.add('incorrect');
+        setTimeout(()=>{
+          child.classList.remove('incorrect');
+          if(wasActive) child.classList.add('active');
+        }, 400);
+      }
+
       if(slots) slots.classList.add('shake');
       setTimeout(()=> slots && slots.classList.remove('shake'), 220);
+
       // if max mistakes reached, reveal and finish
       if(state.mistakes>=state.target.length){
         revealAndFinish();
@@ -499,14 +745,21 @@
       for(let i=0;i<state.target.length;i++){
         const el = slots.children[i];
         el.textContent = state.target[i].toUpperCase();
-        el.classList.remove('underscore');
+        el.classList.remove('underscore', 'active');
+        // If this letter was already correctly guessed, keep it green
+        if(!el.classList.contains('correct')) {
+          // Otherwise show it was part of the answer but missed
+          el.style.opacity = '0.6';
+        }
       }
     }
     finishWord(false);
   }
 
   document.addEventListener('keydown', (e)=>{
-    if(document.getElementById('startModal').style.display!=='none') return;
+    const modal = document.getElementById('startModal');
+    // Check if modal is visible (more robust than checking style.display)
+    if(modal && modal.style.display === 'grid') return;
     if(e.key && e.key.length===1){ handleLetter(e.key); }
   });
 
