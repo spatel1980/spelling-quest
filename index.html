@@ -456,6 +456,10 @@
    ************/
   function startSession(){
     state.index = 0; state.score = 0; state.sessionResults = []; state.newAchievements = [];
+
+    // Clean up any remaining confetti particles
+    document.querySelectorAll('.confetti-particle').forEach(p => p.remove());
+
     const level = state.currentLevel;
     const historySet = new Set(state.profile.history||[]);
     let picks = sampleUnique(WORDS[level], 5, historySet);
@@ -475,6 +479,9 @@
     state.target = state.session[state.index];
     state.revealed = Array.from({length: state.target.length}, ()=> '_');
     els.mistakeReadout.textContent = `Mistakes: ${state.mistakes}/${state.target.length}`;
+
+    // Clean up any remaining confetti particles from previous word
+    document.querySelectorAll('.confetti-particle').forEach(p => p.remove());
 
     const slots = state.revealed.map((ch,i)=>{
       const isActive = i === 0 ? ' active' : '';
@@ -760,6 +767,7 @@
     const n=80; const box = els.gameArea.getBoundingClientRect();
     for(let i=0;i<n;i++){
       const p = document.createElement('div');
+      p.className = 'confetti-particle';
       p.style.position='fixed'; p.style.left=(box.left+box.width/2)+'px'; p.style.top=(box.top+40)+'px';
       p.style.width=p.style.height=(6+Math.random()*6)+'px';
       p.style.background = `hsl(${Math.random()*360},90%,60%)`;
