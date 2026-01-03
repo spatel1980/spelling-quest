@@ -90,7 +90,6 @@
     .word-review{display:grid; gap:8px; margin:12px 0}
     .review-item{display:flex; justify-content:space-between; align-items:center; padding:10px; background:var(--card); border-radius:8px}
     .review-word{font-weight:800; font-size:18px}
-    .review-def{color:var(--muted); font-size:14px; font-style:italic}
 
     .sr{position:absolute; left:-9999px}
 
@@ -216,24 +215,6 @@
     if(age<=11) return 'G56';
     return 'G7P';
   };
-
-  // Simple word definitions (subset - can be expanded)
-  const DEFINITIONS = {
-    cat: 'a small furry pet that says meow', dog: 'a friendly pet that barks', run: 'to move fast on your feet',
-    sun: 'the bright star in the sky', fun: 'something enjoyable', jump: 'to leap into the air',
-    ship: 'a large boat', fish: 'an animal that lives in water', tree: 'a tall plant with leaves',
-    bird: 'an animal with wings that flies', book: 'pages with words to read', milk: 'a white drink',
-    about: 'concerning or regarding', friend: 'someone you like spending time with', happy: 'feeling joy',
-    school: 'a place to learn', animal: 'a living creature', family: 'people related to you',
-    water: 'clear liquid you drink', mountain: 'a very tall hill', ocean: 'a huge body of salt water',
-    bicycle: 'a two-wheeled vehicle you pedal', discover: 'to find something new', science: 'study of nature',
-    solution: 'an answer to a problem', evidence: 'proof that shows something is true',
-    creative: 'good at making new things', ancient: 'very old', achieve: 'to succeed at something',
-    // Add default for words without definitions
-    _default: 'a word to spell correctly'
-  };
-
-  const getDefinition = (word)=> DEFINITIONS[word.toLowerCase()] || DEFINITIONS._default;
 
   /************
    * STATE
@@ -536,8 +517,7 @@
       word: state.target,
       correct: state.correctAttempts,
       incorrect: state.mistakes,
-      perfect: isPerfect,
-      definition: getDefinition(state.target)
+      perfect: isPerfect
     });
 
     // Track perfect word achievement
@@ -548,16 +528,14 @@
     els.scoreReadout.textContent = `Score: ${state.score}`;
     const progressPct = ((state.index+1)/5)*100; els.progress.style.width = progressPct+"%";
 
-    // Show definition and partial credit
-    const def = getDefinition(state.target);
+    // Show partial credit
     const creditText = `${state.correctAttempts}/${state.target.length} correct${isPerfect ? ' - Perfect! 🌟' : ''}`;
-    const defHTML = `
+    const creditHTML = `
       <div style="background:var(--card); padding:12px; border-radius:8px; margin:12px 0">
         <div style="font-weight:700; color:var(--brand); margin-bottom:6px">${creditText}</div>
-        <div style="font-style:italic; color:var(--muted)">"${state.target}" - ${def}</div>
       </div>
     `;
-    document.getElementById('slots').insertAdjacentHTML('afterend', defHTML);
+    document.getElementById('slots').insertAdjacentHTML('afterend', creditHTML);
 
     // expose Next button
     const ctl = document.getElementById('afterControls');
@@ -627,10 +605,7 @@
       const statusIcon = r.perfect ? '🌟' : r.correct >= r.word.length/2 ? '✓' : '○';
       return `
         <div class="review-item">
-          <div>
-            <div class="review-word">${statusIcon} ${r.word}</div>
-            <div class="review-def">${r.definition}</div>
-          </div>
+          <div class="review-word">${statusIcon} ${r.word}</div>
           <div style="color:var(--muted); font-weight:600">${r.correct}/${r.word.length}</div>
         </div>
       `;
@@ -639,7 +614,7 @@
     // Build achievements HTML
     const achievementsHTML = state.newAchievements.length > 0 ? `
       <div style="margin:16px 0">
-        <h3 style="margin:8px 0">🏆 Achievements Unlocked!</h3>
+        <h3 style="margin:8px 0">Achievements Unlocked!</h3>
         ${state.newAchievements.map(a=>`
           <div class="achievement">
             <div class="icon">${a.icon}</div>
@@ -660,7 +635,7 @@
       <p>You scored <b>${state.score}</b> out of <b>${totalLen}</b> possible points (${pct}%).</p>
       ${achievementsHTML}
       <div style="margin:16px 0">
-        <h3 style="margin:8px 0">📝 Session Review</h3>
+        <h3 style="margin:8px 0">Session Review</h3>
         <div class="word-review">${reviewHTML}</div>
       </div>
       <div style="color:var(--muted); font-size:14px; margin:12px 0">
