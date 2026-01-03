@@ -777,9 +777,25 @@
       const g = 0.22;
       let x=0,y=0,life=0;
       const anim = ()=>{
-        life+=1; x+=dx; y+=dy; dy+=g; p.style.transform=`translate(${x*6}px, ${y*6}px) rotate(${life*12}deg)`; p.style.opacity = 1 - life/90;
-        if(life<90) requestAnimationFrame(anim); else p.remove();
-      }; anim();
+        life+=1; x+=dx; y+=dy; dy+=g;
+        p.style.transform=`translate(${x*6}px, ${y*6}px) rotate(${life*12}deg)`;
+        p.style.opacity = Math.max(0, 1 - life/90);
+        if(life<90) {
+          requestAnimationFrame(anim);
+        } else {
+          // Ensure particle is hidden before removal
+          p.style.display = 'none';
+          p.remove();
+        }
+      };
+      anim();
+      // Safety timeout: force remove after 2 seconds regardless of animation state
+      setTimeout(() => {
+        if(p.parentNode) {
+          p.style.display = 'none';
+          p.remove();
+        }
+      }, 2000);
     }
   }
 
