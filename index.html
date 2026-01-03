@@ -457,9 +457,6 @@
   function startSession(){
     state.index = 0; state.score = 0; state.sessionResults = []; state.newAchievements = [];
 
-    // Clean up any remaining confetti particles
-    document.querySelectorAll('.confetti-particle').forEach(p => p.remove());
-
     const level = state.currentLevel;
     const historySet = new Set(state.profile.history||[]);
     let picks = sampleUnique(WORDS[level], 5, historySet);
@@ -479,9 +476,6 @@
     state.target = state.session[state.index];
     state.revealed = Array.from({length: state.target.length}, ()=> '_');
     els.mistakeReadout.textContent = `Mistakes: ${state.mistakes}/${state.target.length}`;
-
-    // Clean up any remaining confetti particles from previous word
-    document.querySelectorAll('.confetti-particle').forEach(p => p.remove());
 
     const slots = state.revealed.map((ch,i)=>{
       const isActive = i === 0 ? ' active' : '';
@@ -558,8 +552,6 @@
       if(state.index<4){ state.index++; renderWord(); saveAll(); }
       else { endSession(); saveAll(); }
     };
-
-    if(revealedCompletely) confettiBurst();
   }
 
   function endSession(){
@@ -758,45 +750,6 @@
       const k = e.target.closest('.key'); if(!k) return;
       handleLetter(k.dataset.k);
     };
-  }
-
-  /************
-   * CONFETTI (tiny)
-   ************/
-  function confettiBurst(){
-    const n=80; const box = els.gameArea.getBoundingClientRect();
-    for(let i=0;i<n;i++){
-      const p = document.createElement('div');
-      p.className = 'confetti-particle';
-      p.style.position='fixed'; p.style.left=(box.left+box.width/2)+'px'; p.style.top=(box.top+40)+'px';
-      p.style.width=p.style.height=(6+Math.random()*6)+'px';
-      p.style.background = `hsl(${Math.random()*360},90%,60%)`;
-      p.style.borderRadius='4px'; p.style.pointerEvents='none'; p.style.zIndex=9999; p.style.opacity=1;
-      document.body.appendChild(p);
-      const dx = (Math.random()-0.5)*6; const dy = (Math.random()-1.6)*8;
-      const g = 0.22;
-      let x=0,y=0,life=0;
-      const anim = ()=>{
-        life+=1; x+=dx; y+=dy; dy+=g;
-        p.style.transform=`translate(${x*6}px, ${y*6}px) rotate(${life*12}deg)`;
-        p.style.opacity = Math.max(0, 1 - life/90);
-        if(life<90) {
-          requestAnimationFrame(anim);
-        } else {
-          // Ensure particle is hidden before removal
-          p.style.display = 'none';
-          p.remove();
-        }
-      };
-      anim();
-      // Safety timeout: force remove after 2 seconds regardless of animation state
-      setTimeout(() => {
-        if(p.parentNode) {
-          p.style.display = 'none';
-          p.remove();
-        }
-      }, 2000);
-    }
   }
 
   /************
