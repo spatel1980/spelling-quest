@@ -483,7 +483,7 @@
       <div class="row" style="align-items:center; justify-content:space-between">
         <div class="pill">Word ${state.index+1} / 5</div>
         <div class="controls">
-          <button class="icon-btn secondary" id="btnSpeak" aria-label="Hear the word"><span>🔊</span> Play</button>
+          <button class="icon-btn secondary" id="btnSpeak" aria-label="Hear the word">Play Word</button>
         </div>
       </div>
       <div class="word-slots" id="slots">${slots}</div>
@@ -529,10 +529,10 @@
     const progressPct = ((state.index+1)/5)*100; els.progress.style.width = progressPct+"%";
 
     // Show partial credit
-    const creditText = `${state.correctAttempts}/${state.target.length} correct${isPerfect ? ' - Perfect! 🌟' : ''}`;
+    const mistakesText = state.mistakes === 0 ? 'Perfect!' : `${state.mistakes} mistake${state.mistakes !== 1 ? 's' : ''}`;
     const creditHTML = `
       <div style="background:var(--card); padding:12px; border-radius:8px; margin:12px 0">
-        <div style="font-weight:700; color:var(--brand); margin-bottom:6px">${creditText}</div>
+        <div style="font-weight:700; color:var(--brand); margin-bottom:6px">${mistakesText}</div>
       </div>
     `;
     document.getElementById('slots').insertAdjacentHTML('afterend', creditHTML);
@@ -602,11 +602,11 @@
 
     // Build word review
     const reviewHTML = state.sessionResults.map(r=>{
-      const statusIcon = r.perfect ? '🌟' : r.correct >= r.word.length/2 ? '✓' : '○';
+      const statusIcon = r.perfect ? '★' : r.incorrect === 0 ? '✓' : ' ';
       return `
         <div class="review-item">
           <div class="review-word">${statusIcon} ${r.word}</div>
-          <div style="color:var(--muted); font-weight:600">${r.correct}/${r.word.length}</div>
+          <div style="color:var(--muted); font-weight:600">${r.incorrect} mistake${r.incorrect !== 1 ? 's' : ''}</div>
         </div>
       `;
     }).join('');
